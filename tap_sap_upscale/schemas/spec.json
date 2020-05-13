@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": ["null", "string"]
+    },
+    "unitName": {
+      "type": ["null", "string"]
+    },
+    "unitSymbol": {
+      "type": ["null", "string"]
+    },
+    "comparable": {
+      "type": ["null", "boolean"]
+    }
+  },
+  "additionalProperties": false
+}
