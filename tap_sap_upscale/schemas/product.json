@@ -17,7 +17,7 @@
       "type": ["null", "number"]
     },
     "currency": {
-      "type": "string"
+      "type": ["null", "string"]
     },
     "stock": {
       "type": ["null", "number"]

@@ -14,7 +14,7 @@
       "type": "string"
     },
     "pureValue": {
-      "type": "string"
+      "type": ["null", "string"]
     },
     "type": {
       "type": ["null" ,"string"]
