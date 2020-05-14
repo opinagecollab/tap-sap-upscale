@@ -1,5 +1,9 @@
 {
-  "username": "my_username",
-  "password": "my_password",
-  "start_date": "2017-01-01T00:00:00Z"
+  "tenant_id": "t1",
+  "api_scheme": "https",
+  "api_base_url": "api.test.com",
+  "api_edition_id": "a1b2-c3d4-e5f6",
+  "api_selling_tree": "a1b2-c3d4-e5f6",
+  "ui_scheme": "https",
+  "ui_base_url": "storefront.test.com"
 }
