@@ -159,10 +159,11 @@ class UpscaleClient:
                     continue
 
                 augmented_custom_attribute = attribute_details
-                augmented_custom_attribute['value'] = custom_attributes[custom_attribute_key]
                 handled_augmented_custom_attributes[custom_attribute_key] = augmented_custom_attribute
 
-            product['augmentedCustomAttributes'].append(
-                handled_augmented_custom_attributes.get(custom_attribute_key))
+            augmented_custom_attribute = handled_augmented_custom_attributes.get(custom_attribute_key)
+            augmented_custom_attribute['value'] = custom_attributes[custom_attribute_key]
+
+            product['augmentedCustomAttributes'].append(augmented_custom_attribute)
 
         return product, handled_augmented_custom_attributes
