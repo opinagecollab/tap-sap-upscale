@@ -229,7 +229,7 @@ def sync(config, state, catalog):
 
                 product_spec_record = \
                     build_record_handler(Record.PRODUCT_SPEC).generate(
-                        attribute, tenant_id=tenant_id, sku=product.get('code'), spec_id=spec_id)
+                        attribute, tenant_id=tenant_id, sku=product.get('sku'), spec_id=spec_id)
 
                 LOGGER.debug('Writing product spec record: {}'.format(product_spec_record))
                 singer.write_record(Record.PRODUCT_SPEC.value, product_spec_record)
