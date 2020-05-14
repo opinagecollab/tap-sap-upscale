@@ -19,7 +19,7 @@ class ProductHandler(BaseHandler):
             'imageUri':
                 product.get('media')[0]['fullSize']
                 if len(product.get('media', [])) > 0
-                and product.get('media').get('fullSize') is not None
+                and product.get('media')[0].get('fullSize') is not None
                 else None,
             'detailsUri': urlunparse((
                 options.get('config').get('ui_scheme'),
