@@ -215,8 +215,8 @@ def sync(config, state, catalog):
         LOGGER.debug('Writing product record: {}'.format(product_record))
         singer.write_record(Record.PRODUCT.value, product_record)
 
-        if 'attributes' in product:
-            for attribute in product['attributes']:
+        if 'augmentedCustomAttributes' in product:
+            for attribute in product['augmentedCustomAttributes']:
                 spec_record = build_record_handler(Record.SPEC).generate(attribute, tenant_id=tenant_id)
 
                 if isinstance(spec_record, dict):
