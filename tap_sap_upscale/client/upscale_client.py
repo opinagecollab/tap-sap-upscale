@@ -57,34 +57,9 @@ class UpscaleClient:
             for product in response['content']:
                 products.append(product)
 
-        for product in products:
-            product['augmentedCustomAttributes'] = []
-            product['categories'] = []
+        augmented_products = self.augment_product_details(products)
 
-            augmented_custom_attributes = {}
-            custom_attributes = product.get('customAttributes', {})
-            for custom_attribute_key in custom_attributes.keys():
-                if custom_attribute_key not in augmented_custom_attributes.keys():
-                    attribute_details = self.fetch_custom_attribute_details(custom_attribute_key)
-                    augmented_custom_attribute = attribute_details
-                    augmented_custom_attribute['value'] = custom_attributes[custom_attribute_key]
-                    augmented_custom_attributes[custom_attribute_key] = augmented_custom_attribute
-
-                product['augmentedCustomAttributes'].append(augmented_custom_attributes.get(custom_attribute_key))
-
-            categories = {}
-            category_ids = product.get('productCategoryIds', [])
-            for category_id in category_ids:
-                if category_id not in categories.keys():
-                    category_details = self.fetch_category_details(category_id)
-                    categories[category_id] = category_details
-
-                product['categories'].append(categories[category_id])
-
-            del product['customAttributes']
-            del product['productCategoryIds']
-
-        return products
+        return augmented_products
 
     def fetch_product_search_list(self, page, page_size):
         if self.selling_tree is None:
@@ -111,7 +86,7 @@ class UpscaleClient:
                                 timeout=10)
 
         if response.status_code != 200:
-            raise Exception('Failed to fetch category details with status code: {}'.format(response.status_code))
+            return None
 
         return response.json()
 
@@ -123,10 +98,71 @@ class UpscaleClient:
                                 verify=False,
                                 timeout=10)
 
+        # should throw exception but the API returning custom attributes that
+        # do not exist in the system anymore
         if response.status_code != 200:
-            raise Exception('Failed to fetch custom attribute details with status code: {}'.format(response.status_code))
+            return None
 
         return response.json()
 
-    def fetch_product_inventory(self):
-        pass
+    def augment_product_details(self, products):
+        augmented_products = []
+
+        handled_augmented_custom_attributes = {}
+        handled_categories = {}
+        for product in products:
+
+            product, handled_categories = \
+                self.augment_product_categories(product, handled_categories)
+
+            product, handled_augmented_custom_attributes = \
+                self.augment_product_custom_attributes(product, handled_augmented_custom_attributes)
+
+            del product['customAttributes']
+            del product['productCategoryIds']
+
+            augmented_products.append(product)
+
+        return augmented_products
+
+    def augment_product_categories(self, product, handled_categories):
+        product['categories'] = []
+
+        category_ids = product.get('productCategoryIds', [])
+        for category_id in category_ids:
+            if category_id is "":
+                continue
+
+            if category_id not in handled_categories.keys():
+                category_details = self.fetch_category_details(category_id)
+                handled_categories[category_id] = category_details
+
+            product['categories'].append(handled_categories[category_id])
+
+        return product, handled_categories
+
+    def augment_product_custom_attributes(self, product, handled_augmented_custom_attributes):
+        product['augmentedCustomAttributes'] = []
+
+        custom_attributes = product.get('customAttributes', {})
+        for custom_attribute_key in custom_attributes.keys():
+
+            # ignore valueless custom attributes
+            if custom_attributes[custom_attribute_key] is None:
+                continue
+
+            if custom_attribute_key not in handled_augmented_custom_attributes.keys():
+                attribute_details = self.fetch_custom_attribute_details(custom_attribute_key)
+
+                # ignore custom attributes without details
+                if attribute_details is None:
+                    continue
+
+                augmented_custom_attribute = attribute_details
+                augmented_custom_attribute['value'] = custom_attributes[custom_attribute_key]
+                handled_augmented_custom_attributes[custom_attribute_key] = augmented_custom_attribute
+
+            product['augmentedCustomAttributes'].append(
+                handled_augmented_custom_attributes.get(custom_attribute_key))
+
+        return product, handled_augmented_custom_attributes
