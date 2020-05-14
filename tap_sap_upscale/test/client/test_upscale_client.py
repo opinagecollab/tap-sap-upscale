@@ -5,6 +5,16 @@ import warnings
 
 from tap_sap_upscale.client.upscale_client import UpscaleClient
 
+category_detail_response = {
+    'id': 'category_id',
+    'name': 'Category name'
+}
+
+custom_attribute_detail_response = {
+    'attributeKey': 'attribute_key',
+    'label': 'Label'
+}
+
 product_search_response = {
     'links': [],
     'content': [
@@ -12,29 +22,33 @@ product_search_response = {
             'sku': 'a1b2c3',
             'name': 'Product 1 name',
             'description': 'Product 1 description',
-            'published': True,
-            'active': True,
             'price': {
                 'originalPrice': 1.1,
                 'sellingPrice': 1.1,
                 'surcharge': {}
             },
-            'returnInfo': {},
-            'media': []
+            'customAttributes': {
+                'attribute_key': 'value'
+            },
+            'productCategoryIds': [
+                "category_id"
+            ]
         },
         {
             'sku': 'd4e5f6',
             'name': 'Product 2 name',
             'description': 'Product 2 description',
-            'published': True,
-            'active': True,
             'price': {
                 'originalPrice': 2.2,
                 'sellingPrice': 2.2,
                 'surcharge': {}
             },
-            'returnInfo': {},
-            'media': []
+            'customAttributes': {
+                'attribute_key': 'value'
+            },
+            'productCategoryIds': [
+                "category_id"
+            ]
         }
     ],
     'page': {
@@ -44,6 +58,55 @@ product_search_response = {
         'number': 1
     },
 }
+
+expected_product_list = [
+    {
+        'sku': 'a1b2c3',
+        'name': 'Product 1 name',
+        'description': 'Product 1 description',
+        'price': {
+            'originalPrice': 1.1,
+            'sellingPrice': 1.1,
+            'surcharge': {}
+        },
+        'augmentedCustomAttributes': [
+            {
+                'attributeKey': 'attribute_key',
+                'label': 'Label',
+                'value': 'value'
+            }
+        ],
+        'categories': [
+            {
+                'id': 'category_id',
+                'name': 'Category name'
+            }
+        ]
+    },
+    {
+        'sku': 'd4e5f6',
+        'name': 'Product 2 name',
+        'description': 'Product 2 description',
+        'price': {
+            'originalPrice': 2.2,
+            'sellingPrice': 2.2,
+            'surcharge': {}
+        },
+        'augmentedCustomAttributes': [
+            {
+                'attributeKey': 'attribute_key',
+                'label': 'Label',
+                'value': 'value'
+            }
+        ],
+        'categories': [
+            {
+                'id': 'category_id',
+                'name': 'Category name'
+            }
+        ]
+    }
+]
 
 
 class TestUpscaleClient(unittest.TestCase):
@@ -59,7 +122,7 @@ class TestUpscaleClient(unittest.TestCase):
         self.assertEqual(
             self.client.product_search_url,
             'https://api.test.com/consumer/product-content'
-            '/products?editionId={}&expand=productCategoryIds&pageNumber={}&pageSize=50'
+            '/products?expand=productCategoryIds&pageNumber={}&pageSize={}'
         )
 
     def test_should_build_proper_product_sellingtree_search_url(self):
@@ -72,7 +135,7 @@ class TestUpscaleClient(unittest.TestCase):
         self.assertEqual(
             self.client.product_search_url,
             'https://api.test.com/consumer/product-content'
-            '/sellingtrees/{}/products?editionId={}&expand=productCategoryIds&pageNumber={}&pageSize=50'
+            '/sellingtrees/{}/products?editionId={}&expand=productCategoryIds&pageNumber={}&pageSize={}'
         )
 
     @httpretty.activate
@@ -89,9 +152,15 @@ class TestUpscaleClient(unittest.TestCase):
             self.client.product_search_url.format('a1b2-c3d4-e5f6', initial_page),
             body=json.dumps(product_search_response))
 
-        product_list = []
-        for product in product_search_response['content']:
-            product_list.append(product)
+        httpretty.register_uri(
+            httpretty.GET,
+            self.client.category_url.format('category_id'),
+            body=json.dumps(category_detail_response))
 
-        result = self.client.fetch_products()
-        self.assertEqual(product_list, result)
+        httpretty.register_uri(
+            httpretty.GET,
+            self.client.custom_attribute_url.format('attribute_key'),
+            body=json.dumps(custom_attribute_detail_response))
+
+        products = self.client.fetch_products()
+        self.assertEqual(expected_product_list, products)
