@@ -118,9 +118,6 @@ class UpscaleClient:
             product, handled_augmented_custom_attributes = \
                 self.augment_product_custom_attributes(product, handled_augmented_custom_attributes)
 
-            del product['customAttributes']
-            del product['productCategoryIds']
-
             augmented_products.append(product)
 
         return augmented_products
@@ -161,7 +158,7 @@ class UpscaleClient:
                 augmented_custom_attribute = attribute_details
                 handled_augmented_custom_attributes[custom_attribute_key] = augmented_custom_attribute
 
-            augmented_custom_attribute = handled_augmented_custom_attributes.get(custom_attribute_key)
+            augmented_custom_attribute = dict(handled_augmented_custom_attributes.get(custom_attribute_key))
             augmented_custom_attribute['value'] = custom_attributes[custom_attribute_key]
 
             product['augmentedCustomAttributes'].append(augmented_custom_attribute)
