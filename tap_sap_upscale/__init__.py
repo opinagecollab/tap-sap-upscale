@@ -6,6 +6,7 @@ import singer
 from datetime import datetime, timezone
 from singer import utils
 from singer.catalog import Catalog, CatalogEntry
+from singer.schema import Schema
 
 from tap_sap_upscale.record.factory import build_record_handler
 from tap_sap_upscale.record.record import Record
@@ -35,7 +36,7 @@ def load_schemas():
         path = get_abs_path('schemas') + '/' + filename
         file_raw = filename.replace('.json', '')
         with open(path) as file:
-            schemas[file_raw] = json.load(file)
+            schemas[file_raw] = Schema.from_dict(json.load(file))
 
     return schemas
 
@@ -117,12 +118,12 @@ def sync(config, state, catalog):
 
     category_stream = catalog.get_stream(Record.CATEGORY.value)
     if category_stream is not None:
-        LOGGER.debug('Writing category schema: \n {} \n and key properties: {}'.format(
+        LOGGER.debug('Writing spec schema: \n {} \n and key properties: {}'.format(
             category_stream.schema,
             category_stream.key_properties))
         singer.write_schema(
             category_stream.tap_stream_id,
-            category_stream.schema,
+            category_stream.schema.to_dict(),
             category_stream.key_properties)
 
     spec_stream = catalog.get_stream(Record.SPEC.value)
@@ -132,7 +133,7 @@ def sync(config, state, catalog):
             spec_stream.key_properties))
         singer.write_schema(
             spec_stream.tap_stream_id,
-            spec_stream.schema,
+            spec_stream.schema.to_dict(),
             spec_stream.key_properties)
 
     product_stream = catalog.get_stream(Record.PRODUCT.value)
@@ -142,7 +143,7 @@ def sync(config, state, catalog):
             product_stream.key_properties))
         singer.write_schema(
             product_stream.tap_stream_id,
-            product_stream.schema,
+            product_stream.schema.to_dict(),
             product_stream.key_properties)
 
     product_spec_stream = catalog.get_stream(Record.PRODUCT_SPEC.value)
@@ -152,7 +153,7 @@ def sync(config, state, catalog):
             product_spec_stream.key_properties))
         singer.write_schema(
             product_spec_stream.tap_stream_id,
-            product_spec_stream.schema,
+            product_spec_stream.schema.to_dict(),
             product_spec_stream.key_properties)
 
     customer_specific_price_stream = catalog.get_stream(Record.CUSTOMER_SPECIFIC_PRICE.value)
@@ -162,7 +163,7 @@ def sync(config, state, catalog):
             customer_specific_price_stream.key_properties))
         singer.write_schema(
             customer_specific_price_stream.tap_stream_id,
-            customer_specific_price_stream.schema,
+            customer_specific_price_stream.schema.to_dict(),
             customer_specific_price_stream.key_properties)
 
     price_point_stream = catalog.get_stream(Record.PRICE_POINT.value)
@@ -172,7 +173,7 @@ def sync(config, state, catalog):
             price_point_stream.key_properties))
         singer.write_schema(
             price_point_stream.tap_stream_id,
-            price_point_stream.schema,
+            price_point_stream.schema.to_dict(),
             price_point_stream.key_properties)
 
     stock_point_stream = catalog.get_stream(Record.STOCK_POINT.value)
@@ -182,7 +183,7 @@ def sync(config, state, catalog):
             stock_point_stream.key_properties))
         singer.write_schema(
             stock_point_stream.tap_stream_id,
-            stock_point_stream.schema,
+            stock_point_stream.schema.to_dict(),
             stock_point_stream.key_properties)
 
     LOGGER.info('Fetching Upscale products')
@@ -196,6 +197,7 @@ def sync(config, state, catalog):
             LOGGER.info('Product has no category! Skipping ...')
             continue
 
+        # For now, we are only handling one category (apparently there's a skill that doesn't know how to deal with a collection of categories)
         category = product.get('categories', [])[0]
         category_record = build_record_handler(Record.CATEGORY).generate(category, tenant_id=tenant_id)
 
@@ -215,36 +217,35 @@ def sync(config, state, catalog):
         LOGGER.debug('Writing product record: {}'.format(product_record))
         singer.write_record(Record.PRODUCT.value, product_record)
 
-        if 'augmentedCustomAttributes' in product:
-            for attribute in product['augmentedCustomAttributes']:
-                spec_record = build_record_handler(Record.SPEC).generate(attribute, tenant_id=tenant_id)
+        # Need to reasses once specs are properly imported. 
+        # if 'augmentedCustomAttributes' in product:
+        #     for attribute in product['augmentedCustomAttributes']:
+        #         spec_record = build_record_handler(Record.SPEC).generate(attribute, tenant_id=tenant_id)
 
-                if isinstance(spec_record, dict):
-                    spec_id = spec_record.get('id')
+        #         if isinstance(spec_record, dict):
+        #             spec_id = spec_record.get('id')
 
-                    LOGGER.debug('Writing spec record: {}'.format(spec_record))
-                    singer.write_record(Record.SPEC.value, spec_record)
-                else:
-                    spec_id = spec_record
+        #             LOGGER.debug('Writing spec record: {}'.format(spec_record))
+        #             singer.write_record(Record.SPEC.value, spec_record)
+        #         else:
+        #             spec_id = spec_record
 
-                product_spec_record = \
-                    build_record_handler(Record.PRODUCT_SPEC).generate(
-                        attribute, tenant_id=tenant_id, sku=product.get('sku'), spec_id=spec_id)
+        #         product_spec_record = \
+        #             build_record_handler(Record.PRODUCT_SPEC).generate(
+        #                 attribute, tenant_id=tenant_id, sku=product.get('sku'), spec_id=spec_id)
 
-                LOGGER.debug('Writing product spec record: {}'.format(product_spec_record))
-                singer.write_record(Record.PRODUCT_SPEC.value, product_spec_record)
+        #         LOGGER.debug('Writing product spec record: {}'.format(product_spec_record))
+        #         singer.write_record(Record.PRODUCT_SPEC.value, product_spec_record)
 
         price_point_record = \
             build_record_handler(Record.PRICE_POINT).generate(product, timestamp=timestamp, tenant_id=tenant_id)
         LOGGER.debug('Writing price_point record: {}'.format(price_point_record))
         singer.write_record(Record.PRICE_POINT.value, price_point_record)
 
-    # should eventually handle stock points as well
-
-    #     stock_point_record = \
-    #         build_record_handler(Record.STOCK_POINT).generate(product, timestamp=timestamp, tenant_id=tenant_id)
-    #     LOGGER.debug('Writing stock_point record: {}'.format(stock_point_record))
-    #     singer.write_record(Record.STOCK_POINT.value, stock_point_record)
+        # stock_point_record = \
+        #     build_record_handler(Record.STOCK_POINT).generate(product, timestamp=timestamp, tenant_id=tenant_id)
+        # LOGGER.debug('Writing stock_point record: {}'.format(stock_point_record))
+        # singer.write_record(Record.STOCK_POINT.value, stock_point_record)
 
     return
 

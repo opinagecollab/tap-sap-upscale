@@ -6,13 +6,15 @@ import urllib3
 
 LOGGER = singer.get_logger()
 
-
 class UpscaleClient:
     PRODUCT_CONTENT_PATH = '/consumer/product-content'
 
     PRODUCT_SEARCH_PATH = '/products?expand=productCategoryIds&pageNumber={}&pageSize={}'
+    #SELLINGTREE_PRODUCT_SEARCH_PATH = '/sellingtrees/{}/products' \
+    #                                  '?editionId={}&expand=productCategoryIds&pageNumber={}&pageSize={}'
     SELLINGTREE_PRODUCT_SEARCH_PATH = '/sellingtrees/{}/products' \
-                                      '?editionId={}&expand=productCategoryIds&pageNumber={}&pageSize={}'
+                                      '?expand=productCategoryIds&pageNumber={}&pageSize={}'
+    
 
     CATEGORY_PATH = '/categories/{}'
     CUSTOM_ATTRIBUTE_PATH = '/custom-attributes/{}'
@@ -49,13 +51,15 @@ class UpscaleClient:
         products = []
 
         response = self.fetch_product_search_list(initial_page, self.PAGE_SIZE)
+        LOGGER.info(f'This is the response {response}')
+
         for product in response['content']:
             products.append(product)
 
         for page in range(2, response['page']['totalPages'] + 1):
             response = self.fetch_product_search_list(page, self.PAGE_SIZE)
             for product in response['content']:
-                products.append(product)
+                products.append(product)            
 
         augmented_products = self.augment_product_details(products)
 
@@ -65,7 +69,7 @@ class UpscaleClient:
         if self.selling_tree is None:
             product_search_url = self.product_search_url.format(page, page_size)
         else:
-            product_search_url = self.product_search_url.format(self.selling_tree, self.edition_id, page, page_size)
+            product_search_url = self.product_search_url.format(self.selling_tree, page, page_size)
 
         response = requests.get(product_search_url,
                                 headers={'Accept-Language': 'en-US'},
@@ -108,15 +112,20 @@ class UpscaleClient:
     def augment_product_details(self, products):
         augmented_products = []
 
-        handled_augmented_custom_attributes = {}
+        #handled_augmented_custom_attributes = {}
         handled_categories = {}
         for product in products:
 
             product, handled_categories = \
                 self.augment_product_categories(product, handled_categories)
 
-            product, handled_augmented_custom_attributes = \
-                self.augment_product_custom_attributes(product, handled_augmented_custom_attributes)
+            # Custom Attributes (Specs) will be handled in a different way. 
+            # - Custom attributes in a product are not necessarily registered in Upscale
+            # - Also, custom attributes are used for dynamic categories search. Other functionality
+            #   is quite limited. For example, we would want to hide the attribute in client applications. 
+            #   However, if we do so, attributes are also hidden from the response.  
+            # product, handled_augmented_custom_attributes = \
+            #    self.augment_product_custom_attributes(product, handled_augmented_custom_attributes)
 
             augmented_products.append(product)
 

@@ -1,9 +1,9 @@
 {
   "tenant_id": "t1",
   "api_scheme": "https",
-  "api_base_url": "api.test.com",
-  "api_edition_id": "a1b2-c3d4-e5f6",
-  "api_selling_tree": "a1b2-c3d4-e5f6",
+  "api_base_url": "training-cxai-approuter-caas2-sap-stage.cfapps.us10.hana.ondemand.com",
+  "api_edition_id": "bb447db3-4be5-4c02-9765-d082e705d2aa",
+  "api_selling_tree": "77e2e027-74af-467e-a649-e881299c9126",
   "ui_scheme": "https",
   "ui_base_url": "storefront.test.com"
 }
