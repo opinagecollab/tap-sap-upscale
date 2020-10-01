@@ -31,7 +31,6 @@ class TestProductHandler(unittest.TestCase):
                     'description': 'Product description'
                 },
                 tenant_id='t1',
-                category_id='t11',
                 config=config
             ),
             build_record_handler(Record.PRODUCT).generate(
@@ -51,16 +50,13 @@ class TestProductHandler(unittest.TestCase):
                     'description': 'Product description'
                 },
                 tenant_id='t1',
-                category_id='t12',
                 config=config
             )
         ]
-
         self.assertEqual(products, [
             {
                 'sku': '123456',
                 'tenantId': 't1',
-                'categoryId': 't11',
                 'regularPrice': 1.23,
                 'salePrice': None,
                 'currency': None,
@@ -77,7 +73,6 @@ class TestProductHandler(unittest.TestCase):
             {
                 'sku': '234567',
                 'tenantId': 't1',
-                'categoryId': 't12',
                 'regularPrice': 3.45,
                 'currency': None,
                 'salePrice': None,

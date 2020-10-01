@@ -9,7 +9,7 @@ class ProductSpecHandler(BaseHandler):
         return {
             'tenantId': options.get('tenant_id'),
             'sku': options.get('sku'),
-            'specId': options.get('spec_id'),
+            # 'specId': options.get('spec_id'), # For now specs are not generated
             'value': spec.get('value'),
             'pureValue': spec.get('value') if self.is_numeric(spec.get('value')) else None,
             'type': None,

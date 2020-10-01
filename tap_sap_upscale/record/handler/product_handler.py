@@ -11,7 +11,6 @@ class ProductHandler(BaseHandler):
         return {
             'sku': product.get('id'),   
             'tenantId': options.get('tenant_id'),
-            'categoryId': options.get('category_id'),
             # Currently, we don't consider variants and their potential surcharge. 
             'regularPrice': product.get('price', {}).get('sellingPrice'),
             'salePrice': None,

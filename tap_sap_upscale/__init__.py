@@ -24,10 +24,8 @@ REQUIRED_CONFIG_KEYS = [
 LOGGER = singer.get_logger()
 LOGGER.setLevel(level='DEBUG')
 
-
 def get_abs_path(path):
     return os.path.join(os.path.dirname(os.path.realpath(__file__)), path)
-
 
 def load_schemas():
     """ Load schemas from schemas folder """
@@ -39,7 +37,6 @@ def load_schemas():
             schemas[file_raw] = Schema.from_dict(json.load(file))
 
     return schemas
-
 
 def discover():
     LOGGER.debug('Discovering available schemas')
@@ -76,6 +73,12 @@ def discover():
             stream_metadata.append(is_selected)
             stream_key_properties.append('sku')
             stream_key_properties.append('tenantId')
+
+        if schema_name == Record.CATEGORY_PRODUCT.value:
+            stream_metadata.append(is_selected)
+            stream_key_properties.append('sku')
+            stream_key_properties.append('tenantId')
+            stream_key_properties.append('categoryId')
 
         if schema_name == Record.PRODUCT_SPEC.value:
             stream_metadata.append(is_selected)
@@ -118,7 +121,7 @@ def sync(config, state, catalog):
 
     category_stream = catalog.get_stream(Record.CATEGORY.value)
     if category_stream is not None:
-        LOGGER.debug('Writing spec schema: \n {} \n and key properties: {}'.format(
+        LOGGER.debug('Writing category schema: \n {} \n and key properties: {}'.format(
             category_stream.schema,
             category_stream.key_properties))
         singer.write_schema(
@@ -155,6 +158,16 @@ def sync(config, state, catalog):
             product_spec_stream.tap_stream_id,
             product_spec_stream.schema.to_dict(),
             product_spec_stream.key_properties)
+
+    category_product_stream = catalog.get_stream(Record.CATEGORY_PRODUCT.value)
+    if category_product_stream is not None:
+        LOGGER.debug('Writing category_product schema: \n {} \n and key properties: {}'.format(
+            category_product_stream.schema,
+            category_product_stream.key_properties))
+        singer.write_schema(
+            category_product_stream.tap_stream_id,
+            category_product_stream.schema.to_dict(),
+            category_product_stream.key_properties)
 
     customer_specific_price_stream = catalog.get_stream(Record.CUSTOMER_SPECIFIC_PRICE.value)
     if customer_specific_price_stream is not None:
@@ -196,56 +209,58 @@ def sync(config, state, catalog):
         if len(product_categories) == 0:
             LOGGER.info('Product has no category! Skipping ...')
             continue
-
-        # For now, we are only handling one category (apparently there's a skill that doesn't know how to deal with a collection of categories)
-        category = product.get('categories', [])[0]
-        category_record = build_record_handler(Record.CATEGORY).generate(category, tenant_id=tenant_id)
-
-        # category record builder returns a record if the category hasn't been handled yet
-        # otherwise, it returns the id of an already handled category record
-        if isinstance(category_record, dict):
-            category_id = category_record.get('id')
-
-            LOGGER.debug('Writing category record: {}'.format(category_record))
-            singer.write_record(Record.CATEGORY.value, category_record)
-        else:
-            category_id = category_record
-
+        
         product_record = \
             build_record_handler(Record.PRODUCT).generate(
-                product, tenant_id=tenant_id, category_id=category_id, config=config)
+                product, tenant_id=tenant_id, config=config)
         LOGGER.debug('Writing product record: {}'.format(product_record))
         singer.write_record(Record.PRODUCT.value, product_record)
 
-        # Need to reasses once specs are properly imported. 
-        # if 'augmentedCustomAttributes' in product:
-        #     for attribute in product['augmentedCustomAttributes']:
-        #         spec_record = build_record_handler(Record.SPEC).generate(attribute, tenant_id=tenant_id)
+        for category in product_categories: 
+            category_record = build_record_handler(Record.CATEGORY).generate(category, tenant_id=tenant_id)
+            # category record builder returns a record if the category hasn't been handled yet
+            # otherwise, it returns the id of an already handled category record
+            if isinstance(category_record, dict):
+                category_id = category_record.get('id')
 
-        #         if isinstance(spec_record, dict):
-        #             spec_id = spec_record.get('id')
+                LOGGER.debug('Writing category record: {}'.format(category_record))
+                singer.write_record(Record.CATEGORY.value, category_record)
+            else:
+                category_id = category_record
+            
+            category_product_record = build_record_handler(Record.CATEGORY_PRODUCT).generate(
+                tenant_id=tenant_id, sku=product.get('sku'), category_id=category_id)
 
-        #             LOGGER.debug('Writing spec record: {}'.format(spec_record))
-        #             singer.write_record(Record.SPEC.value, spec_record)
-        #         else:
-        #             spec_id = spec_record
+            LOGGER.debug('Writing category_product record: {}'.format(category_product_record))
+            singer.write_record(Record.CATEGORY_PRODUCT.value, category_product_record)
 
-        #         product_spec_record = \
-        #             build_record_handler(Record.PRODUCT_SPEC).generate(
-        #                 attribute, tenant_id=tenant_id, sku=product.get('sku'), spec_id=spec_id)
+        # TODO: Uncomment when we have a way to extract specs "metadata" from Upscale. 
+        #    In our warehouse data model, a product_spec represents a product's feature and a spec provides information about the type of data 
+        #    that feature represents. For example, a product_spec could be 1/2.3". Without some context this data is not that useful. However, with 
+        #    the spec we can qualify it to be the optical sensor size and defined in inches. 
+        #    The Commerce Cloud already has a rich classification data model that we can use to retrieve both of this pieces of information. However, 
+        #    for now, Upscale only exposes specs without any semantics (they are a collection of strings). Until this is available this tap cannot 
+        #    import the spec and product_spec data in the same way as the tap-sap-commerce-cloud. Commenting this out for now. 
+        # 
+        # product_specs = parse_product_specs()
+        # for spec in product_specs:
+        #     product_spec_record = \
+        #         build_record_handler(Record.PRODUCT_SPEC).generate(
 
-        #         LOGGER.debug('Writing product spec record: {}'.format(product_spec_record))
-        #         singer.write_record(Record.PRODUCT_SPEC.value, product_spec_record)
+        #         )
+            
+        #     LOGGER.debug(f'Writing product spec record: {product_spec_record}')
+        #     singer.write_record(Record.PRODUCT_SPEC.value, product_spec_record)
 
         price_point_record = \
             build_record_handler(Record.PRICE_POINT).generate(product, timestamp=timestamp, tenant_id=tenant_id)
         LOGGER.debug('Writing price_point record: {}'.format(price_point_record))
         singer.write_record(Record.PRICE_POINT.value, price_point_record)
 
-        # stock_point_record = \
-        #     build_record_handler(Record.STOCK_POINT).generate(product, timestamp=timestamp, tenant_id=tenant_id)
-        # LOGGER.debug('Writing stock_point record: {}'.format(stock_point_record))
-        # singer.write_record(Record.STOCK_POINT.value, stock_point_record)
+        stock_point_record = \
+            build_record_handler(Record.STOCK_POINT).generate(product, timestamp=timestamp, tenant_id=tenant_id)
+        LOGGER.debug('Writing stock_point record: {}'.format(stock_point_record))
+        singer.write_record(Record.STOCK_POINT.value, stock_point_record)
 
     return
 
