@@ -32,7 +32,7 @@ class TestProductSpecHandler(unittest.TestCase):
             {
                 'tenantId': 't1',
                 'sku': 'abc123',
-                'specId': 't11',
+                # 'specId': 't11',
                 'value': '1.23',
                 'pureValue': '1.23',
                 'type': None,
@@ -42,7 +42,7 @@ class TestProductSpecHandler(unittest.TestCase):
             {
                 'tenantId': 't1',
                 'sku': 'abc123',
-                'specId': 't12',
+                # 'specId': 't12',
                 'value': '2.34 unit',
                 'pureValue': None,
                 'type': None,

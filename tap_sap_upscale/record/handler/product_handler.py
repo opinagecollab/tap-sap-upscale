@@ -9,13 +9,19 @@ class ProductHandler(BaseHandler):
 
     def generate(self, product, **options):
         return {
-            'sku': product.get('id'),
+            'sku': product.get('id'),   
             'tenantId': options.get('tenant_id'),
-            'categoryId': options.get('category_id'),
+            # Currently, we don't consider variants and their potential surcharge. 
             'regularPrice': product.get('price', {}).get('sellingPrice'),
             'salePrice': None,
+
+            # Currently, Upscale only supports one currency per tenant. Here we could hardcode it or leave it None.
             'currency': None,
+
+            # Will have to retrieve it. Requires authentication. 
             'stock': None,
+
+            # There can be more than one images. Shouldn't we change this in the schema?  
             'imageUri':
                 product.get('media')[0]['fullSize']
                 if len(product.get('media', [])) > 0

@@ -6,18 +6,22 @@ import urllib3
 
 LOGGER = singer.get_logger()
 
-
 class UpscaleClient:
     PRODUCT_CONTENT_PATH = '/consumer/product-content'
+    INVENTORY_CONTENT_PATH = 'consumer/inventory-service'
 
-    PRODUCT_SEARCH_PATH = '/products?expand=productCategoryIds&pageNumber={}&pageSize={}'
-    SELLINGTREE_PRODUCT_SEARCH_PATH = '/sellingtrees/{}/products' \
-                                      '?editionId={}&expand=productCategoryIds&pageNumber={}&pageSize={}'
+    ## This client only retrieves products assigned to a selling tree. 
+    ## - Note that editionId is optional. 
+    PRODUCT_SEARCH_PATH = '/sellingtrees/{}/products' \
+                                      '?expand=productCategoryIds&pageNumber={}&pageSize={}'
 
-    CATEGORY_PATH = '/categories/{}'
+    INVENTORY_SEARCH_PATH = '/atp?productIds={}'
+
+    CATEGORY_SEARCH_PATH = '/categories?pageNumber={}&pageSize={}'
     CUSTOM_ATTRIBUTE_PATH = '/custom-attributes/{}'
 
-    PAGE_SIZE = 100
+    # Upscale appears to have a 50 items per-page maximum. 
+    PAGE_SIZE = 50
 
     def __init__(self, config):
         self.scheme = config.get('api_scheme')
@@ -25,47 +29,42 @@ class UpscaleClient:
         self.edition_id = config.get('api_edition_id')
         self.selling_tree = config.get('api_selling_tree')
 
-        if self.selling_tree is None:
-            self.product_search_url = urlunparse((
-                self.scheme, self.base_url, self.PRODUCT_CONTENT_PATH + self.PRODUCT_SEARCH_PATH, None, None, None
-            ))
-        else:
-            self.product_search_url = urlunparse((
-                self.scheme, self.base_url, self.PRODUCT_CONTENT_PATH + self.SELLINGTREE_PRODUCT_SEARCH_PATH, None, None, None
-            ))
+        self.product_search_url = urlunparse((
+            self.scheme, self.base_url, self.PRODUCT_CONTENT_PATH + self.PRODUCT_SEARCH_PATH, None, None, None
+        ))
 
-        self.category_url = urlunparse((
-            self.scheme, self.base_url, self.PRODUCT_CONTENT_PATH + self.CATEGORY_PATH, None, None, None
+        self.category_search_url = urlunparse((
+            self.scheme, self.base_url, self.PRODUCT_CONTENT_PATH + self.CATEGORY_SEARCH_PATH, None, None, None
         ))
 
         self.custom_attribute_url = urlunparse((
             self.scheme, self.base_url, self.PRODUCT_CONTENT_PATH + self.CUSTOM_ATTRIBUTE_PATH, None, None, None
         ))
 
+        self.inventory_search_url = urlunparse((
+            self.scheme, self.base_url, self.INVENTORY_CONTENT_PATH + self.INVENTORY_SEARCH_PATH, None, None, None
+        ))
+
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     def fetch_products(self):
         initial_page = 1
-        products = []
 
-        response = self.fetch_product_search_list(initial_page, self.PAGE_SIZE)
-        for product in response['content']:
-            products.append(product)
+        LOGGER.info('Fetching products')
+        products, page_info = self.fetch_product_search_list(initial_page, self.PAGE_SIZE)
 
-        for page in range(2, response['page']['totalPages'] + 1):
-            response = self.fetch_product_search_list(page, self.PAGE_SIZE)
-            for product in response['content']:
-                products.append(product)
+        for page in range(2, page_info['totalPages'] + 1):
+            response, _ = self.fetch_product_search_list(page, self.PAGE_SIZE)
+            products.extend(response)
 
-        augmented_products = self.augment_product_details(products)
+        augmented_products = self.augment_product_details(products)        
 
         return augmented_products
 
     def fetch_product_search_list(self, page, page_size):
-        if self.selling_tree is None:
-            product_search_url = self.product_search_url.format(page, page_size)
-        else:
-            product_search_url = self.product_search_url.format(self.selling_tree, self.edition_id, page, page_size)
+        product_search_url = self.product_search_url.format(self.selling_tree, page, page_size)
+        if self.edition_id != None:
+            product_search_url += "&editionId=" + self.edition_id
 
         response = requests.get(product_search_url,
                                 headers={'Accept-Language': 'en-US'},
@@ -75,54 +74,81 @@ class UpscaleClient:
         if response.status_code != 200:
             raise Exception('Failed to fetch product list with status code: {}'.format(response.status_code))
 
-        return response.json()
+        json_reponse = response.json()
+        products = json_reponse['content']
+        self.fetch_products_inventory(products)
 
-    def fetch_category_details(self, category_id):
-        category_url = self.category_url.format(category_id)
+        return products, json_reponse['page']
 
-        response = requests.get(category_url,
+    def fetch_products_inventory(self, products):
+        product_ids = ",".join(map(lambda product: product.get('id'), products))
+        products_inventory_url = self.inventory_search_url.format(product_ids)
+
+        response = requests.get(products_inventory_url,
+                        headers={'Accept-Language': 'en-US'},
+                        verify=False,
+                        timeout=10)
+
+        if response.status_code != 200:
+            raise Exception('Failed to fetch products inventory with status code: {}'.format(response.status_code))
+
+        # ATP stands for Available to Promise - which articles are available
+        products_availability = {}
+        for atp in response.json()['atpChecks']:
+            product_id = atp.get('productId')
+            products_availability[product_id] = atp.get('quantityAvailable')
+        
+        for product in products:
+            quantityAvailable = products_availability.get(product.get('id'))
+            if quantityAvailable == None:
+                quantityAvailable = 0
+            product['quantityAvailable'] = quantityAvailable
+
+    def fetch_categories(self):
+        initial_page = 1
+        categories = {}
+
+        LOGGER.info('Fetching categories')
+        response = self.fetch_categories_list(initial_page, self.PAGE_SIZE)
+
+        for category in response['content']:
+            category_id = category.get('id')
+            categories[category_id] = category
+
+        for page in range(2, response['page']['totalPages'] + 1):
+            response = self.fetch_categories_list(page, self.PAGE_SIZE)
+            for category in response['content']:
+                category_id = category.get('id')
+                categories[category_id] = category
+
+        return categories
+
+    def fetch_categories_list(self, page, page_size):
+        category_search_url = self.category_search_url.format(page, page_size)
+        if self.edition_id != None:
+            category_search_url += "&editionId=" + self.edition_id
+        
+        response = requests.get(category_search_url, 
                                 headers={'Accept-Language': 'en-US'},
                                 verify=False,
                                 timeout=10)
-
+        
         if response.status_code != 200:
-            return None
-
-        return response.json()
-
-    def fetch_custom_attribute_details(self, custom_attribute_id):
-        custom_attribute_url = self.custom_attribute_url.format(custom_attribute_id)
-
-        response = requests.get(custom_attribute_url,
-                                headers={'Accept-Language': 'en-US'},
-                                verify=False,
-                                timeout=10)
-
-        # should throw exception but the API returning custom attributes that
-        # do not exist in the system anymore
-        if response.status_code != 200:
-            return None
-
+            raise Exception('Failed to fetch categories list with status code: {}'.format(response.status_code))
+        
         return response.json()
 
     def augment_product_details(self, products):
         augmented_products = []
 
-        handled_augmented_custom_attributes = {}
-        handled_categories = {}
+        categories = self.fetch_categories()
         for product in products:
-
-            product, handled_categories = \
-                self.augment_product_categories(product, handled_categories)
-
-            product, handled_augmented_custom_attributes = \
-                self.augment_product_custom_attributes(product, handled_augmented_custom_attributes)
-
+            product = self.augment_product_categories(product, categories)
             augmented_products.append(product)
 
         return augmented_products
 
-    def augment_product_categories(self, product, handled_categories):
+    def augment_product_categories(self, product, categories):
         product['categories'] = []
 
         category_ids = product.get('productCategoryIds', [])
@@ -130,37 +156,11 @@ class UpscaleClient:
             if category_id is "":
                 continue
 
-            if category_id not in handled_categories.keys():
-                category_details = self.fetch_category_details(category_id)
-                handled_categories[category_id] = category_details
+            if category_id not in categories.keys():
+                product_id = product.get('id')
+                raise Exception(f'Product {product_id} has unknown category {category_id}')
+            
+            product['categories'].append(categories[category_id])
 
-            product['categories'].append(handled_categories[category_id])
+        return product
 
-        return product, handled_categories
-
-    def augment_product_custom_attributes(self, product, handled_augmented_custom_attributes):
-        product['augmentedCustomAttributes'] = []
-
-        custom_attributes = product.get('customAttributes', {})
-        for custom_attribute_key in custom_attributes.keys():
-
-            # ignore valueless custom attributes
-            if custom_attributes[custom_attribute_key] is None:
-                continue
-
-            if custom_attribute_key not in handled_augmented_custom_attributes.keys():
-                attribute_details = self.fetch_custom_attribute_details(custom_attribute_key)
-
-                # ignore custom attributes without details
-                if attribute_details is None:
-                    continue
-
-                augmented_custom_attribute = attribute_details
-                handled_augmented_custom_attributes[custom_attribute_key] = augmented_custom_attribute
-
-            augmented_custom_attribute = dict(handled_augmented_custom_attributes.get(custom_attribute_key))
-            augmented_custom_attribute['value'] = custom_attributes[custom_attribute_key]
-
-            product['augmentedCustomAttributes'].append(augmented_custom_attribute)
-
-        return product, handled_augmented_custom_attributes
