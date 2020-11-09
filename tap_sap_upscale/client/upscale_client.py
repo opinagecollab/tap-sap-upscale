@@ -17,7 +17,8 @@ class UpscaleClient:
 
     INVENTORY_SEARCH_PATH = '/atp?productIds={}'
 
-    CATEGORY_SEARCH_PATH = '/categories?pageNumber={}&pageSize={}'
+    CATEGORY_FETCH_PATH  = '/categories/{}?expand=parentIds'
+    CATEGORY_SEARCH_PATH = '/categories?pageNumber={}&pageSize={}&expand=parentIds'
     CUSTOM_ATTRIBUTE_PATH = '/custom-attributes/{}'
 
     # Upscale appears to have a 50 items per-page maximum. 
@@ -35,6 +36,10 @@ class UpscaleClient:
 
         self.category_search_url = urlunparse((
             self.scheme, self.base_url, self.PRODUCT_CONTENT_PATH + self.CATEGORY_SEARCH_PATH, None, None, None
+        ))
+
+        self.fetch_category_url = urlunparse((
+            self.scheme, self.base_url, self.PRODUCT_CONTENT_PATH + self.CATEGORY_FETCH_PATH, None, None, None
         ))
 
         self.custom_attribute_url = urlunparse((
@@ -104,6 +109,25 @@ class UpscaleClient:
                 quantityAvailable = 0
             product['quantityAvailable'] = quantityAvailable
 
+    def augment_category(self, categories, augmented_categories_ids, category): 
+        current_category_id = category.get('id')
+        if current_category_id in augmented_categories_ids:
+            return
+
+        parent_ids = category['parentIds']
+        parent_categories = []
+        for parent_cat_id in parent_ids:
+            if parent_cat_id not in categories:
+                LOGGER.info(f'Trying to retrieve category {parent_cat_id}. It was not found in batch.')
+                parent_category = self.fetch_category(parent_cat_id)
+                categories[parent_cat_id] = parent_category
+            parent_category = categories[parent_cat_id]
+            self.augment_category(categories, augmented_categories_ids, parent_category)
+        
+            parent_categories.append(categories[parent_cat_id])
+        category['parentCategories'] = parent_categories
+        augmented_categories_ids.add(current_category_id)
+
     def fetch_categories(self):
         initial_page = 1
         categories = {}
@@ -121,7 +145,25 @@ class UpscaleClient:
                 category_id = category.get('id')
                 categories[category_id] = category
 
+        # Augment categories
+        augmented_categories_ids = set()
+        for category in list(categories.values()):
+            self.augment_category(categories, augmented_categories_ids, category)
+
         return categories
+
+    def fetch_category(self, category_id):
+        fetch_category_url = self.fetch_category_url.format(category_id)
+        
+        response = requests.get(fetch_category_url, 
+                                headers={'Accept-Language': 'en-US'},
+                                verify=False,
+                                timeout=10)
+        
+        if response.status_code != 200:
+            raise Exception(f'Failed to fetch category {category_id}')
+
+        return response.json()
 
     def fetch_categories_list(self, page, page_size):
         category_search_url = self.category_search_url.format(page, page_size)
@@ -153,7 +195,7 @@ class UpscaleClient:
 
         category_ids = product.get('productCategoryIds', [])
         for category_id in category_ids:
-            if category_id is "":
+            if category_id == "":
                 continue
 
             if category_id not in categories.keys():

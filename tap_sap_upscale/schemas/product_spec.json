@@ -19,6 +19,9 @@
     "type": {
       "type": ["null" ,"string"]
     },
+    "isInferred": {
+      "type": ["null", "boolean"]
+    }, 
     "interpretedType": {
       "type": ["null" ,"string"]
     },

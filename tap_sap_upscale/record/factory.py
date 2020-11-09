@@ -1,5 +1,6 @@
 from tap_sap_upscale.record.record import Record
 from tap_sap_upscale.record.handler.category_handler import CategoryHandler
+from tap_sap_upscale.record.handler.category_parent_handler import CategoryParentHandler
 from tap_sap_upscale.record.handler.category_product_handler import CategoryProductHandler
 from tap_sap_upscale.record.handler.customer_specific_price_handler import CustomerSpecificPriceHandler
 from tap_sap_upscale.record.handler.price_point_handler import PricePointHandler
@@ -33,6 +34,10 @@ def build_record_handler(record: Record):
     if record == Record.CATEGORY_PRODUCT:
         # pylint: disable=no-member
         return CategoryProductHandler.get_instance()
+    
+    if record == Record.CATEGORY_PARENT:
+        # pylint: disable=no-member
+        return CategoryParentHandler.get_instance()
 
     if record == Record.SPEC:
         # pylint: disable=no-member

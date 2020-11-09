@@ -12,6 +12,8 @@ from tap_sap_upscale.record.factory import build_record_handler
 from tap_sap_upscale.record.record import Record
 from tap_sap_upscale.client.upscale_client import UpscaleClient
 
+TAP_VERSION = '1.0.0'
+
 REQUIRED_CONFIG_KEYS = [
     'tenant_id',
     'api_scheme',
@@ -40,6 +42,7 @@ def load_schemas():
 
 def discover():
     LOGGER.debug('Discovering available schemas')
+    LOGGER.debug(f'- tap-sap-upscale -> version {TAP_VERSION}')
     raw_schemas = load_schemas()
     streams = []
 
@@ -58,6 +61,11 @@ def discover():
         if schema_name == Record.CATEGORY.value:
             stream_metadata.append(is_selected)
             stream_key_properties.append('id')
+        
+        if schema_name == Record.CATEGORY_PARENT.value: 
+            stream_metadata.append(is_selected)
+            stream_key_properties.append('categoryId')
+            stream_key_properties.append('parentId')
 
         if schema_name == Record.CUSTOMER_SPECIFIC_PRICE.value:
             stream_metadata.append(is_selected)
@@ -113,9 +121,36 @@ def discover():
 
     return Catalog(streams)
 
+def write_category_record(category, tenant_id):
+    category_id = category.get('id')
+    category_handler = build_record_handler(Record.CATEGORY)
+
+    if category_handler.is_handled(category_id): 
+       return category_handler.get_category_record(category_id) 
+
+    category_record = build_record_handler(Record.CATEGORY).generate(category, tenant_id=tenant_id)
+    LOGGER.debug('Writing category record: {}'.format(category_record))
+    singer.write_record(Record.CATEGORY.value, category_record)
+
+    parent_categories = category['parentCategories']
+    for parent_category in parent_categories:
+        parent_record = write_category_record(parent_category, tenant_id)
+
+        # Write the relationship record
+        category_generated_id = category_record.get('id')
+        parent_category_generated_id = parent_record.get('id')
+        category_parent_record = build_record_handler(Record.CATEGORY_PARENT).generate(
+            category_id=category_generated_id, 
+            parent_id=parent_category_generated_id)
+
+        LOGGER.debug('Writing category parent record: {}'.format(category_parent_record))
+        singer.write_record(Record.CATEGORY_PARENT.value, category_parent_record)
+
+    return category_record
 
 def sync(config, state, catalog):
     LOGGER.info('Syncing selected streams')
+    LOGGER.debug(f'- tap-sap-upscale -> version {TAP_VERSION}')
     timestamp = datetime.now(timezone.utc).isoformat()
     tenant_id = config.get('tenant_id')
 
@@ -128,6 +163,16 @@ def sync(config, state, catalog):
             category_stream.tap_stream_id,
             category_stream.schema.to_dict(),
             category_stream.key_properties)
+    
+    category_parent_stream = catalog.get_stream(Record.CATEGORY_PARENT.value)
+    if category_parent_stream is not None: 
+        LOGGER.debug('Writing category_parent schema: \n {} \n and key properties: {}'.format(
+            category_parent_stream.schema,
+            category_parent_stream.key_properties))
+        singer.write_schema(
+            category_parent_stream.tap_stream_id, 
+            category_parent_stream.schema.to_dict(),
+            category_parent_stream.key_properties)
 
     spec_stream = catalog.get_stream(Record.SPEC.value)
     if spec_stream is not None:
@@ -217,16 +262,8 @@ def sync(config, state, catalog):
         singer.write_record(Record.PRODUCT.value, product_record)
 
         for category in product_categories: 
-            category_record = build_record_handler(Record.CATEGORY).generate(category, tenant_id=tenant_id)
-            # category record builder returns a record if the category hasn't been handled yet
-            # otherwise, it returns the id of an already handled category record
-            if isinstance(category_record, dict):
-                category_id = category_record.get('id')
-
-                LOGGER.debug('Writing category record: {}'.format(category_record))
-                singer.write_record(Record.CATEGORY.value, category_record)
-            else:
-                category_id = category_record
+            category_record = write_category_record(category, tenant_id)
+            category_id = category_record.get('id')
             
             category_product_record = build_record_handler(Record.CATEGORY_PRODUCT).generate(
                 tenant_id=tenant_id, sku=product.get('sku'), category_id=category_id)

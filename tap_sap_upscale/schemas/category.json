@@ -1,6 +1,9 @@
 {
   "type": "object",
   "properties": {
+    "originalId": {
+      "type": "string"
+    }, 
     "id": {
       "type": "string"
     },

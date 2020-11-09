@@ -12,6 +12,7 @@ class ProductSpecHandler(BaseHandler):
             # 'specId': options.get('spec_id'), # For now specs are not generated
             'value': spec.get('value'),
             'pureValue': spec.get('value') if self.is_numeric(spec.get('value')) else None,
+            'isInferred': False,
             'type': None,
             'interpretedType': None,
             'interpretedValue': None
