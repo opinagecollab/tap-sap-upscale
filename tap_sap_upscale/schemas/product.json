@@ -42,6 +42,9 @@
     },
     "reviewCount": {
       "type": ["null", "number"]
+    },
+    "images": {
+      "type": "string"
     }
   },
   "additionalProperties": false

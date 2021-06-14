@@ -14,8 +14,8 @@ setup(
         "tap_sap_upscale.record.handler"
     ],
     install_requires=[
-        "singer-python==5.9.0",
-        "requests==2.24.0",
+        "singer-python",
+        "requests",
     ],
     entry_points="""
     [console_scripts]

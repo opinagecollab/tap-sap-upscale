@@ -3,6 +3,15 @@ from urllib.parse import urlunparse
 from tap_sap_upscale.record.handler.base import BaseHandler
 from tap_sap_upscale.record.handler.decorators import Singleton
 
+def get_images(product):
+    links = ""
+    if len(product.get('media', [])) > 0:
+        for i in range(len(product.get('media', []))):
+            links += product.get('media')[i]['fullSize'] + " | "
+            #links.append(product.get('media')[i]['fullSize'])
+
+    return links[:-2]
+
 
 @Singleton
 class ProductHandler(BaseHandler):
@@ -24,8 +33,7 @@ class ProductHandler(BaseHandler):
             # There can be more than one images. Shouldn't we change this in the schema?  
             'imageUri':
                 product.get('media')[0]['fullSize']
-                if len(product.get('media', [])) > 0
-                and product.get('media')[0].get('fullSize') is not None
+                if len(product.get('media', [])) > 0 and product.get('media')[0].get('fullSize') is not None
                 else None,
             'detailsUri': urlunparse((
                 options.get('config').get('ui_scheme'),
@@ -40,5 +48,6 @@ class ProductHandler(BaseHandler):
             'summary': None,
             'manufacturer': None,
             'reviewAverage': None,
-            'reviewCount': None
+            'reviewCount': None,
+            'images': get_images(product)#product.get('media')[0]['fullSize']
         }
