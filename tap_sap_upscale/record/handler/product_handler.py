@@ -53,6 +53,5 @@ class ProductHandler(BaseHandler):
         }
 
 
-    git config --global url."https://63c95715675e25c270b4326c32c48073d4fcc007:@github.wdf.sap.corp/".insteadOf "https://github.wdf.sap.corp/"
 
 
