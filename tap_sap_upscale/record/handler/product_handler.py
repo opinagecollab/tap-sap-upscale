@@ -51,10 +51,3 @@ class ProductHandler(BaseHandler):
             'reviewCount': None,
             'images': get_images(product)#product.get('media')[0]['fullSize']
         }
-
-
-
-
-
-
-git config --global url."https://7091926f089e3fbe38a7c91bf8123a2b75f91:@github.wdf.sap.corp/".insteadOf "https://github.wdf.sap.corp/"
