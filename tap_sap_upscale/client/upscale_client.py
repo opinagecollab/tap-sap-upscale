@@ -153,13 +153,13 @@ class UpscaleClient:
 
         category_ids = product.get('productCategoryIds', [])
         for category_id in category_ids:
-            if category_id is "":
+            if category_id == "":
                 continue
 
             if category_id not in categories.keys():
                 product_id = product.get('id')
-                raise Exception(f'Product {product_id} has unknown category {category_id}')
-            
+                #raise Exception(f'Product {product_id} has unknown category {category_id}')
+                raise Exception("Product" + product_id + "has unknown category")
             product['categories'].append(categories[category_id])
 
         return product
